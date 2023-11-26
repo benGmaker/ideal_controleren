@@ -1,16 +1,25 @@
-# This is a sample Python script.
+import pandas as pd
+import os
+import glob
+from pick import pick
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
-
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    print_hi('PyCharm')
+    os_path = (os.getcwd())
+    test_path = os_path + "/testdata"
+    file_selection(test_path)
+    relative_path = os_path + "/testdata/website.xlsx"
+    df = pd.read_excel(relative_path)
+    print(df)
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+
+def file_selection(path):
+    #returns the selected excel files in the order [website, snelstart, onbekend]
+    csv_files = glob.glob(os.path.join(path, "*.xlsx"))  # reading out which excel files are in directory [strings]
+    results = []
+    titles = ['select website list','select snelstart list','select unkown user list']
+    for i in range(0,2):
+        option, index = pick(csv_files, titles(i))
+        print(option)
+        csv_files.pop(index)
+    #def clean_website(df):
+
