@@ -45,16 +45,16 @@ def format_snelstart(df):
     #Reformats the snelstart dataframe
     return df
 
-ERROR_SNELSTART_WEBSITE_COLUMN_NAME = "ERROR_SNELSTAT-WEBSITE"
+CORRECT_SNELSTART_WEBSITE_COLUMN_NAME = "SNELSTART-WEBSITE_CORRECT"
+CORRRECT_NOT_PAID_NAME = "NOT_PAID_CORRECT"
 AFGEREKEND = 'Afgerekend' #names of used columns
 OMZETAANTAL = 'OmzetAantal'
-def errors_website_snelstart(df):
-    #finds the errors between snelstart and snelstart
-    correcte_inboekingen = np.where( (df[OMZETAANTAL] == 1) &  (df[AFGEREKEND] == 'Ja'),True,False) #finding correct
-    df[ERROR_SNELSTART_WEBSITE_COLUMN_NAME] = '' #creating empty column
-    foute_inboekingen = np.invert(correcte_inboekingen)
-    df.loc[foute_inboekingen,ERROR_SNELSTART_WEBSITE_COLUMN_NAME] = 'fout'
-    df.loc[correcte_inboekingen, ERROR_SNELSTART_WEBSITE_COLUMN_NAME] = 'goed'
+def correct_website_snelstart(df):
+    #
+    df[OMZETAANTAL] = df[OMZETAANTAL].fillna(0) #filling empty cells with zero's to make boolean statement easier
+    #finding the correct data and writing data
+    df[CORRECT_SNELSTART_WEBSITE_COLUMN_NAME] = np.where( (df[OMZETAANTAL] == 1) &  (df[AFGEREKEND] == 'Ja'),True,False) #finding correct inboekingen
+    df[CORRRECT_NOT_PAID_NAME] = np.where( (df[OMZETAANTAL] == 0 ) & (df[AFGEREKEND] == 'Nee'),True,False) #finding correct not paid
     return df
 
 if __name__ == '__main__':
@@ -76,8 +76,15 @@ if __name__ == '__main__':
     merged = pd.merge(website, snelstart,how="outer", on=['ID-nummer'])
     #todo onbekende klant data invoeg functie toevoegen
     merged.to_excel("RAW DATA.xlsx")
-    snelstart_website_fout = errors_website_snelstart(merged) #checking between website and snelstart errors
-    snelstart_website_fout.to_excel('snelstartfout.xlsx')
+
+    ## Participant check functionality:
+    ## Check for GOOD cases specifacally and assign a true or false accordingly
+    ##      -> importantly these are very specific and simple correct cases
+    ## If done for all the the true cases, only one case should be true for each inboeking
+    ##      -> If all are false something is incorrect
+    ##      -> If more than 2 are true something is incorrect -> 2 cases can't be correct at the same time
+    snelstart_website_correct = correct_website_snelstart(merged) #checking between website and snelstart correct values
+    snelstart_website_correct.to_excel('snelstartfout.xlsx') #writing out resulting data
     #todo onbekende klant controle toevoegen
     #   * onbekend - website match
     #   * onbekend - snelstart match
