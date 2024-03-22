@@ -4,39 +4,45 @@ import glob
 from pick import pick
 import numpy as np
 
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
-from reportlab.lib import colors
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
-table_style = TableStyle([
-    ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-    ('FONTSIZE', (0, 0), (-1, 0), 14),
-    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-    ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-    ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
-    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-    ('FONTSIZE', (0, 1), (-1, -1), 12),
-    ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
-])
+def _draw_as_table(df, pagesize):
+    alternating_colors = [['white'] * len(df.columns), ['lightgray'] * len(df.columns)] * len(df)
+    alternating_colors = alternating_colors[:len(df)]
+    fig, ax = plt.subplots(figsize=pagesize)
+    ax.axis('tight')
+    ax.axis('off')
+    the_table = ax.table(cellText=df.values,
+                        rowLabels=df.index,
+                        colLabels=df.columns,
+                        rowColours=['lightblue']*len(df),
+                        colColours=['lightblue']*len(df.columns),
+                        cellColours=alternating_colors,
+                        loc='center')
+    return fig
 
-def create_pdf(df,filename):
-    pdf = SimpleDocTemplate("dataframe.pdf", pagesize=letter)
+def dataframe_to_pdf(df, filename, numpages=(1, 1), pagesize=(11, 8.5)):
+    with PdfPages(filename) as pdf:
+        nh, nv = numpages
+        rows_per_page = len(df) // nh
+        cols_per_page = len(df.columns) // nv
+        for i in range(0, nh):
+            for j in range(0, nv):
+                page = df.iloc[(i * rows_per_page):min((i + 1) * rows_per_page, len(df)),
+                       (j * cols_per_page):min((j + 1) * cols_per_page, len(df.columns))]
+                fig = _draw_as_table(page, pagesize)
+                if nh > 1 or nv > 1:
+                    # Add a part/page number at bottom-center of page
+                    fig.text(0.5, 0.5 / pagesize[0],
+                             "Part-{}x{}: Page-{}".format(i + 1, j + 1, i * nv + j + 1),
+                             ha='center', fontsize=8)
+                pdf.savefig(fig, bbox_inches='tight')
 
-    data = pd.read_csv("snelstartfout.xlsx")
-    table_data = []
-    for i, row in data.iterrows():
-        table_data.append(list(row))
+                plt.close()
 
-    table = Table(table_data)
-    table.setStyle(table_style)
-    pdf_table = []
-    pdf_table.append(df)
-
-    pdf.build(pdf_table)
+def create_pdf(df, filename):
+    dataframe_to_pdf(df, filename)
 
 def file_selection(path):
     # returns the selected excel files in the order [website, snelstart, onbekend]
@@ -144,9 +150,12 @@ def correct_result(df):
     #      -> If more than 2 are true something is incorrect -> 2 cases can't be correct at the same time
     df['sum'] = df[CORRECT_SNELSTART_WEBSITE_COLUMN_NAME] + df[CORRRECT_NOT_PAID_NAME] + df[CORRECT_WEBSITE_ONBEKEND]
     df['result'] = df['sum'] == 1
-
-
     return df
+
+def data_selection(df):
+    df_small = df[WEBSITE_MATCH_NAME]
+    df_small['First name'] = df['First name']
+    return df_small
 
 if __name__ == '__main__':
     os_path = (os.getcwd())
@@ -155,9 +164,8 @@ if __name__ == '__main__':
 
     # TEST
     # filepaths = [test_path + '\\web.xlsx', test_path + '\\asml.xlsx', test_path + '\\onbekend.xlsx']  #loading test files
-    filepaths = [test_path + '\\v2\\website.xlsx', test_path + '\\v2\\snelstart.xlsx',
-                 test_path + '\\v2\\onbekend.xlsx']  # loading test files
-
+    #filepaths = [test_path + '\\v2\\website.xlsx', test_path + '\\v2\\snelstart.xlsx',test_path + '\\v2\\onbekend.xlsx']  # loading test files
+    filepaths = [test_path + '\\test3\\website.xlsx', test_path + '\\test3\\snelstart.xlsx',test_path + '\\test3\\onbekend.xlsx']  # loading test files
     # reading in the data
     website = pd.read_excel(filepaths[0])
     snelstart = pd.read_excel(filepaths[1])
@@ -176,5 +184,7 @@ if __name__ == '__main__':
     snelstart_website_correct = correct_website_snelstart(merged)  # checking between website and snelstart correct values
     df = correct_onbekend(snelstart_website_correct) #checking matches between onbekend and snelstart + website
     df = correct_result(df) #doing the final check if all results are correct
-    create_pdf(df, 'result.pdf') #writing out final results to pdf
+
     df.to_excel('snelstartfout.xlsx')  # writing out resulting data to excel
+    df_small = data_selection(df)
+    create_pdf(df_small, 'result.pdf')  # writing out final results to pdf
