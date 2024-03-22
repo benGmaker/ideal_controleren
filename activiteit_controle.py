@@ -41,15 +41,22 @@ def dataframe_to_pdf(df, filename, numpages=(1, 1), pagesize=(11, 8.5)):
 
                 plt.close()
 
+KLANTENPER_PAGINA = 30
 def create_pdf(df, filename):
-    dataframe_to_pdf(df, filename)
+    n_pages = int(np.ceil(len(df)/KLANTENPER_PAGINA))
+    numpages = (n_pages,1)
+    pagesize = (20, 8.5)
+    dataframe_to_pdf(df, filename, numpages, pagesize)
 
+NO_UNKOWN_USER_DATA = 'NO UNKOWN USER LIST'
 def file_selection(path):
     # returns the selected excel files in the order [website, snelstart, onbekend]
     csv_files = glob.glob(os.path.join(path, "*.xlsx"))  # reading out which excel files are in directory [strings]
     results = []
     titles = ['select website list', 'select snelstart list', 'select unkown user list']
     for i in range(0, 3):
+        if i == 2: #add no data option
+            csv_files.append(NO_UNKOWN_USER_DATA)
         option, index = pick(csv_files, titles[i])
         results.append(option)
         csv_files.pop(index)
@@ -61,6 +68,7 @@ def clean_website(df):
     # Finds the starting position of the table in the excel file such that it is impossible to paste it incorrectly into excel
     columns = df.columns  # finding column names
     # TODO check toevoegen om te kijken of de colommen al kloppen, want anders maakt dit het stuk hieronder
+    match = 0
     for i in columns:
         if WEBSITE_MATCH_NAME in df[i].values:  # check if the value is in the column
             match = df.loc[df[i] == WEBSITE_MATCH_NAME].index  # finding the index of the data
@@ -152,39 +160,77 @@ def correct_result(df):
     df['result'] = df['sum'] == 1
     return df
 
+WEBSITE_COLUMN_SELECTION = ['ID-nummer','First name','Last name','Afgerekend']
+SNELSTART_COLUMN_SELECTION = ['OmzetAantal','OmzetBedragExclusiefBtw','naam']
+ONBEKEND_COLUMN_SELECTION = ['unkown customer name']
+COLUMN_SELECTION = []
 def data_selection(df):
-    df_small = df[WEBSITE_MATCH_NAME]
-    df_small['First name'] = df['First name']
+    #data_selection select only the necessary data needed for review
+
+    #creating data selection
+    COLUMN_SELECTION = []
+    COLUMN_SELECTION.extend(WEBSITE_COLUMN_SELECTION)
+    COLUMN_SELECTION.extend(SNELSTART_COLUMN_SELECTION)
+    COLUMN_SELECTION.extend(ONBEKEND_COLUMN_SELECTION)
+    COLUMN_SELECTION.extend(['result'])
+
+    #selecting data
+    df_small = pd.DataFrame() #Creating new dataframe
+    df_small[COLUMN_SELECTION] = df[COLUMN_SELECTION] #selecting desired columns
+
+    #sorting data
+    df_small = df_small.sort_values(by=['result'],ascending=True) #sorting by validity result
+
     return df_small
+
 
 if __name__ == '__main__':
     os_path = (os.getcwd())
     test_path = os_path + "\\testdata"
-    #  filepaths = file_selection(test_path) #selecting the files to be website, snelstart, unkown
+    filepaths = file_selection(test_path) #selecting the files to be website, snelstart, unkown
 
-    # TEST
+    # TEST FILES PATHS
     # filepaths = [test_path + '\\web.xlsx', test_path + '\\asml.xlsx', test_path + '\\onbekend.xlsx']  #loading test files
     #filepaths = [test_path + '\\v2\\website.xlsx', test_path + '\\v2\\snelstart.xlsx',test_path + '\\v2\\onbekend.xlsx']  # loading test files
-    filepaths = [test_path + '\\test3\\website.xlsx', test_path + '\\test3\\snelstart.xlsx',test_path + '\\test3\\onbekend.xlsx']  # loading test files
+    #filepaths = [test_path + '\\test3\\website.xlsx', test_path + '\\test3\\snelstart.xlsx',test_path + '\\test3\\onbekend.xlsx']  # loading test files
     # reading in the data
+    print('reading data')
     website = pd.read_excel(filepaths[0])
     snelstart = pd.read_excel(filepaths[1])
-    onbekend = pd.read_excel(filepaths[2])
+    if filepaths[2] == NO_UNKOWN_USER_DATA:
+        onbekend = pd.DataFrame()
+    else:
+        onbekend = pd.read_excel(filepaths[2])
 
     # cleaning up the data
+    print('Cleaning data')
     website = clean_website(website)  # removing possible clutter from the website
     snelstart = format_snelstart(snelstart)
-    onbekend = clean_onbekend(onbekend)
-    partial_merge = pd.merge(website, snelstart, how="outer", on=['ID-nummer'])
-    merged = pd.merge(partial_merge, onbekend, how="outer", on=['ID-nummer'])
-    # todo onbekende klant data invoeg functie toevoegen
-    merged.to_excel("RAW DATA.xlsx")
+    if filepaths[2] != NO_UNKOWN_USER_DATA:
+        onbekend = clean_onbekend(onbekend) #only adding unkown user data if it is there
+    else:
+        onbekend[WEBSITE_MATCH_NAME] = [int(66)] #creating empty dataframe with column name that will be refrenced
+        onbekend[ONBEKEND_NAAM] = ['No unkown users given']  # creating empty dataframe with column name that will be refrenced
 
+    #merging data into 1 dataframe
+    print('Performing analysis')
+    merged = pd.merge(website, snelstart, how="outer", on=['ID-nummer'])
+    merged = pd.merge(merged, onbekend, how="outer", on=['ID-nummer'])
 
-    snelstart_website_correct = correct_website_snelstart(merged)  # checking between website and snelstart correct values
-    df = correct_onbekend(snelstart_website_correct) #checking matches between onbekend and snelstart + website
-    df = correct_result(df) #doing the final check if all results are correct
+    #performing checks on the data
+    final_data = correct_website_snelstart(merged)  # checking between website and snelstart correct values
+    final_data = correct_onbekend(final_data) #checking matches between onbekend and snelstart + website
+    final_data = correct_result(final_data) #doing the final check if all results are correct
 
-    df.to_excel('snelstartfout.xlsx')  # writing out resulting data to excel
-    df_small = data_selection(df)
-    create_pdf(df_small, 'result.pdf')  # writing out final results to pdf
+    #processing data and printing results
+    print('Saving results')
+    basis_name = str(round(snelstart['Artikelcode'].iloc[1])) + ' ' + snelstart['Omschrijving'].iloc[1]
+    basis_name = basis_name.replace(':','')
+    final_data.to_excel(basis_name +"alle_data.xlsx")  # writing all the data to the exel
+
+    print('creating pdf')
+    df_small = data_selection(final_data) #selecting only necesarry information
+    create_pdf(df_small, basis_name + 'result.pdf')  # writing out final results to pdf
+
+#todo betere foutcodes toevoegen
+#Foutcode verkeerde type data finden
