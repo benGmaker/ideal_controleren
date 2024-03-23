@@ -1,11 +1,13 @@
-import pandas as pd
+
 import os
+import pandas as pd
 import glob
 from pick import pick
 import numpy as np
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from datetime import datetime
 
 def _draw_as_table(df, pagesize):
     alternating_colors = [['white'] * len(df.columns), ['lightgray'] * len(df.columns)] * len(df)
@@ -22,7 +24,7 @@ def _draw_as_table(df, pagesize):
                         loc='center')
     return fig
 
-def dataframe_to_pdf(df, filename, numpages=(1, 1), pagesize=(11, 8.5)):
+def dataframe_to_pdf(df, filename, basename, numpages=(1, 1), pagesize=(11, 8.5)):
     with PdfPages(filename) as pdf:
         nh, nv = numpages
         rows_per_page = len(df) // nh
@@ -35,18 +37,18 @@ def dataframe_to_pdf(df, filename, numpages=(1, 1), pagesize=(11, 8.5)):
                 if nh > 1 or nv > 1:
                     # Add a part/page number at bottom-center of page
                     fig.text(0.5, 0.5 / pagesize[0],
-                             "Part-{}x{}: Page-{}".format(i + 1, j + 1, i * nv + j + 1),
+                             "Part-{}x{}: Page-{}".format(i + 1, j + 1, i * nv + j + 1) + basename,
                              ha='center', fontsize=8)
                 pdf.savefig(fig, bbox_inches='tight')
 
                 plt.close()
 
 KLANTENPER_PAGINA = 30
-def create_pdf(df, filename):
+def create_pdf(df, filename, basename):
     n_pages = int(np.ceil(len(df)/KLANTENPER_PAGINA))
     numpages = (n_pages,1)
     pagesize = (20, 8.5)
-    dataframe_to_pdf(df, filename, numpages, pagesize)
+    dataframe_to_pdf(df, filename, basename,numpages, pagesize)
 
 NO_UNKOWN_USER_DATA = 'NO UNKOWN USER LIST'
 def file_selection(path):
@@ -224,13 +226,24 @@ if __name__ == '__main__':
 
     #processing data and printing results
     print('Saving results')
+
+    #creating a file name
+    now = datetime.now()#adding date and time information to name
+    dt_string = now.strftime("%d-%m-%Y %H-%M-%S")
+    date_time = 'made on (' + dt_string + ')'
+
+    #adding activity information
     basis_name = str(round(snelstart['Artikelcode'].iloc[1])) + ' ' + snelstart['Omschrijving'].iloc[1]
     basis_name = basis_name.replace(':','')
-    final_data.to_excel(basis_name +"alle_data.xlsx")  # writing all the data to the exel
+
+    #adding date information and removing ilegal characters
+    basis_name = 'made on (' + dt_string + ')' + basis_name
+
+    final_data.to_excel("ALLDATA " + basis_name +".xlsx")  #exporting all data if analysis is desired
 
     print('creating pdf')
-    df_small = data_selection(final_data) #selecting only necesarry information
-    create_pdf(df_small, basis_name + 'result.pdf')  # writing out final results to pdf
+    df_small = data_selection(final_data) #selecting only necesarry information for export
 
-#todo betere foutcodes toevoegen
-#Foutcode verkeerde type data finden
+    create_pdf(df_small[df_small['result'] == False], '!ERRORS ' + basis_name + '.pdf', basis_name) #exporting errors
+    create_pdf(onbekend, "unkown customers " + basis_name + '.pdf', basis_name) #exporting all unkown users used
+    create_pdf(df_small, "result " + basis_name + '.pdf', basis_name)  #exporting all the final data
