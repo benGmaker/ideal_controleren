@@ -1,13 +1,61 @@
-
-import os
 import pandas as pd
+import os
+import sys
+import time
 import glob
 from pick import pick
 import numpy as np
-
+import art
+from colorama import Fore, Back, Style
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
+
+FONT1 = 'tarty1'
+FPS = 10
+class CLI_GUI:
+    def __init__(self):
+        self.text1 = art.text2art(text = 'the 66th presents',font = 'smslant')
+        self.text2 = art.text2art(text = "versneldstart", font = FONT1)
+        self.text3 = art.text2art(text = "controle", font = FONT1)
+        self.text4 = art.text2art(text = '     Accelerated!',font = 'smslant')
+    def startupscreen(self, duration = 1    ):
+        print(Style.BRIGHT + " ")
+        d = 12
+        for i in range(FPS*duration):
+            ofset = i*3
+            os.system('cls')
+            self.printcolorcycle(self.text1, 10, ofset)
+            self.printcolorcycle(self.text2, 12, ofset)
+            self.printcolorcycle(self.text3, 10, ofset)
+            print(("\n made by Ben Gortemaker, Chairman & Editor-in-Chief of the 66th Board"))
+            time.sleep(1 / FPS)
+
+    def printcolorcycle(self,text, basediv = 3, offset = 0):
+        count = offset
+        for i in text:
+
+            remainder = np.floor(count/basediv%3) #devide by three and round down
+            if remainder == 0:
+                sys.stdout.write(Fore.BLUE + i)
+            if remainder == 1:
+                sys.stdout.write(Fore.YELLOW + i)
+            if remainder == 2:
+                sys.stdout.write(Fore.BLUE   + i)
+            count += 1
+
+    STEPS = 1003
+    DURATION = 0.01
+    def printlogo(self):
+        with open("readme.txt", "r") as f:
+            logo = f.read()
+        print(" ")
+        step = len(logo) // self.STEPS
+        for i in range(self.STEPS):
+            sys.stdout.write(Fore.BLUE + logo[i*step+1:(i+1)*step])
+            time.sleep(self.DURATION/self.STEPS)
+        print(("made by Ben Gortemaker, Chairman & Editor-in-Chief of the 66th Board"))
+        print(Fore.YELLOW + self.text4)
 
 def _draw_as_table(df, pagesize):
     alternating_colors = [['white'] * len(df.columns), ['lightgray'] * len(df.columns)] * len(df)
@@ -94,7 +142,20 @@ def format_snelstart(df):
     df = df.join(df_split, how='right')
     df[WEBSITE_MATCH_NAME] = df[WEBSITE_MATCH_NAME].fillna(0)  # removing n/a in the id column
     df = df.astype({WEBSITE_MATCH_NAME: 'int'})  # setting id column to integers
-    # Reformats the snelstart dataframe
+
+    # checking if the selling price is consistant
+    prices = set(df['OmzetBedragExclusiefBtw']) #finding the unique values in the OmzetBedragExclusiefBtw column
+    #There should only be four values at most
+    # - unkown x value,
+    # - lunchlecture person x
+    # - value and product price x 1
+    # - value and product price x 0
+    print('Different types of sold amount per customer')
+    print(prices)
+    if len(prices) > 4:
+        sys.stdout.write(Fore.RED)
+        print('IMPORTANT THERE ARE MORE THAN 4 DIFFERENT PRICES, IT IS LIKELY THAT SOME PRODUCT HAS BEEN SOLD INCORRECTLY')
+
     return df
 
 ONBEKEND_NAAM = 'unkown customer name'
@@ -187,15 +248,13 @@ def data_selection(df):
 
 
 if __name__ == '__main__':
-    os_path = (os.getcwd())
-    test_path = os_path + "\\testdata"
-    filepaths = file_selection(test_path) #selecting the files to be website, snelstart, unkown
+    cli_gui = CLI_GUI()
+    cli_gui.startupscreen(1)
+    print('\n Give working directory and press enter')
+    print('  e.g. C:\\Users\\username\\OFAC_2023-2024\\penno\\activities\\activity')
+    path = input()
+    filepaths = file_selection(path) #selecting the files to be website, snelstart, unkown
 
-    # TEST FILES PATHS
-    # filepaths = [test_path + '\\web.xlsx', test_path + '\\asml.xlsx', test_path + '\\onbekend.xlsx']  #loading test files
-    #filepaths = [test_path + '\\v2\\website.xlsx', test_path + '\\v2\\snelstart.xlsx',test_path + '\\v2\\onbekend.xlsx']  # loading test files
-    #filepaths = [test_path + '\\test3\\website.xlsx', test_path + '\\test3\\snelstart.xlsx',test_path + '\\test3\\onbekend.xlsx']  # loading test files
-    # reading in the data
     print('reading data')
     website = pd.read_excel(filepaths[0])
     snelstart = pd.read_excel(filepaths[1])
@@ -204,7 +263,7 @@ if __name__ == '__main__':
     else:
         onbekend = pd.read_excel(filepaths[2])
 
-    # cleaning up the data
+    #cleaning up the data
     print('Cleaning data')
     website = clean_website(website)  # removing possible clutter from the website
     snelstart = format_snelstart(snelstart)
@@ -239,11 +298,18 @@ if __name__ == '__main__':
     #adding date information and removing ilegal characters
     basis_name = 'made on (' + dt_string + ')' + basis_name
 
-    final_data.to_excel("ALLDATA " + basis_name +".xlsx")  #exporting all data if analysis is desired
+    save_path = path + '\\' + basis_name
+    os.mkdir(save_path) #creating new saving directory
+    final_data.to_excel(save_path + "\\" + "ALLDATA " + basis_name +".xlsx")  #exporting all data if analysis is desired
+    final_data.to_excel(save_path + "\\" + basis_name +"alle_data.xlsx")  # writing all the data to the exel
 
-    print('creating pdf')
+    print('creating pdfs')
     df_small = data_selection(final_data) #selecting only necesarry information for export
+    df_small = data_selection(final_data) #selecting only necesarry information
+    create_pdf(df_small,save_path + "\\" + basis_name + 'result.pdf', basis_name)  # writing out final results to pdf
 
-    create_pdf(df_small[df_small['result'] == False], '!ERRORS ' + basis_name + '.pdf', basis_name) #exporting errors
-    create_pdf(onbekend, "unkown customers " + basis_name + '.pdf', basis_name) #exporting all unkown users used
-    create_pdf(df_small, "result " + basis_name + '.pdf', basis_name)  #exporting all the final data
+    create_pdf(df_small[df_small['result'] == False], save_path + '\\!ERRORS ' + basis_name + '.pdf', basis_name) #exporting errors
+    create_pdf(onbekend, save_path + "\\unkown customers " + basis_name + '.pdf', basis_name) #exporting all unkown users used
+    create_pdf(df_small, save_path + "\\result " + basis_name + '.pdf', basis_name)  #exporting all the final data
+
+    cli_gui.printlogo()
